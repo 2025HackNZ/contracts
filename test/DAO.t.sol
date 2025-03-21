@@ -9,7 +9,7 @@ contract DAOTest is Test {
     address public alice = address(0x1);
     address public bob = address(0x2);
     address public charlie = address(0x3);
-    
+
     uint256 public constant MINIMUM_DEPOSIT = 1 ether;
     uint256 public constant VOTING_PERIOD = 7; // 7 days
 
@@ -31,8 +31,9 @@ contract DAOTest is Test {
         assertEq(dao.totalDeposits(), 1 ether);
     }
 
-    function testFailDepositBelowMinimum() public {
+    function test_RevertIf_DepositBelowMinimum() public {
         vm.prank(alice);
+        vm.expectRevert();
         dao.deposit{value: 0.5 ether}();
     }
 
@@ -80,7 +81,7 @@ contract DAOTest is Test {
         assertEq(yesVotes * 1e9, 2 ether);
     }
 
-    function testFailVoteTwice() public {
+    function test_RevertIf_VoteTwice() public {
         vm.prank(alice);
         dao.deposit{value: 1 ether}();
 
@@ -91,6 +92,7 @@ contract DAOTest is Test {
         dao.vote(0);
 
         vm.prank(alice);
+        vm.expectRevert();
         dao.vote(0); // Should fail
     }
 
@@ -128,10 +130,10 @@ contract DAOTest is Test {
         assertTrue(executed);
     }
 
-    function testFailExecuteProposalTwice() public {
+    function test_RevertIf_ExecuteProposalTwice() public {
         // Setup similar to testExecuteProposal
         address payable target = payable(address(0x4));
-        
+
         vm.prank(alice);
         dao.deposit{value: 4 ether}();
 
@@ -142,10 +144,11 @@ contract DAOTest is Test {
         dao.vote(0);
 
         vm.warp(block.timestamp + (VOTING_PERIOD * 1 days) + 1);
-        
+
         dao.executeProposal(0);
+        vm.expectRevert();
         dao.executeProposal(0); // Should fail
     }
 
     receive() external payable {}
-} 
+}
