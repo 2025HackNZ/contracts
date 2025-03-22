@@ -11,18 +11,18 @@ contract DAOTest is Test {
     address public bob = address(0x2);
     address public charlie = address(0x3);
 
-    uint256 public constant MINIMUM_DEPOSIT = 1 ether;
+    uint256 public constant MINIMUM_DEPOSIT = 1_000_000; // 1 NZDD
     uint256 public constant VOTING_PERIOD = 7; // 7 days
 
     function setUp() public {
-        // Deploy mock NZDD token
-        nzdd = new MockERC20("New Zealand Digital Dollar", "NZDD");
+        // Deploy mock NZDD token with 6 decimals
+        nzdd = new MockERC20("New Zealand Digital Dollar", "NZDD", 6);
         dao = new DAO(address(nzdd), MINIMUM_DEPOSIT, VOTING_PERIOD);
         
-        // Mint and approve tokens for test addresses
-        nzdd.mint(alice, 10 ether);
-        nzdd.mint(bob, 10 ether);
-        nzdd.mint(charlie, 10 ether);
+        // Mint 10 NZDD to each test address
+        nzdd.mint(alice, 10_000_000); // 10 NZDD
+        nzdd.mint(bob, 10_000_000);   // 10 NZDD
+        nzdd.mint(charlie, 10_000_000); // 10 NZDD
         
         vm.prank(alice);
         nzdd.approve(address(dao), type(uint256).max);
@@ -34,18 +34,18 @@ contract DAOTest is Test {
 
     function testDeposit() public {
         vm.prank(alice);
-        dao.deposit(1 ether);
+        dao.deposit(1_000_000); // 1 NZDD
 
         (uint256 depositAmount, uint256 joinedAt) = dao.getMemberInfo(alice);
-        assertEq(depositAmount, 1 ether);
+        assertEq(depositAmount, 1_000_000);
         assertEq(joinedAt, block.timestamp);
-        assertEq(dao.totalDeposits(), 1 ether);
+        assertEq(dao.totalDeposits(), 1_000_000);
     }
 
     function test_RevertIf_DepositBelowMinimum() public {
         vm.prank(alice);
         vm.expectRevert();
-        dao.deposit(0.5 ether);
+        dao.deposit(500_000); // 0.5 NZDD
     }
 
     function testCreateProposal() public {
@@ -75,13 +75,13 @@ contract DAOTest is Test {
     function testVotingAndAutoExecution() public {
         // Setup
         vm.prank(alice);
-        dao.deposit(4 ether);
+        dao.deposit(4_000_000); // 4 NZDD
 
         vm.prank(bob);
-        dao.deposit(1 ether);
+        dao.deposit(1_000_000); // 1 NZDD
 
         address target = address(0x4);
-        uint256 proposalAmount = 0.5 ether;
+        uint256 proposalAmount = 500_000; // 0.5 NZDD
         
         // Mint tokens to DAO for proposal execution
         nzdd.mint(address(dao), proposalAmount);
@@ -96,15 +96,21 @@ contract DAOTest is Test {
         (,,,bool executed,,) = dao.getProposal(0);
         assertTrue(executed);
         assertEq(nzdd.balanceOf(target), proposalAmount);
-        assertEq(dao.totalDeposits(), 4.5 ether); // 5 ether - 0.5 ether
+        assertEq(dao.totalDeposits(), 4_500_000); // 5 NZDD - 0.5 NZDD
     }
 
     function test_RevertIf_VoteTwice() public {
         vm.prank(alice);
-        dao.deposit(1 ether);
+        dao.deposit(1_000_000); // 1 NZDD
+
+        address target = address(0x4);
+        uint256 proposalAmount = 500_000; // 0.5 NZDD
+
+        // Mint tokens to DAO for proposal execution
+        nzdd.mint(address(dao), proposalAmount);
 
         vm.prank(alice);
-        dao.createProposal("Test Proposal", 0.5 ether, address(0x4));
+        dao.createProposal("Test Proposal", proposalAmount, target);
 
         vm.prank(alice);
         dao.vote(0);
@@ -121,16 +127,17 @@ contract DAOTest is Test {
 contract MockERC20 {
     string public name;
     string public symbol;
-    uint8 public decimals = 18;
+    uint8 public immutable decimals;
     
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
     
     uint256 public totalSupply;
 
-    constructor(string memory _name, string memory _symbol) {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals) {
         name = _name;
         symbol = _symbol;
+        decimals = _decimals;
     }
 
     function mint(address to, uint256 amount) public {
