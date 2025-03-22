@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 contract DAO {
-    // ??? Access control
+    IERC20 public immutable nzdd;  // Added: NZDD token contract
+
     struct Proposal {
         string description;
         uint256 yesVotes;
         uint256 endTime;
         bool executed;
-        uint256 amount;        // Added: amount of ETH needed for proposal
-        address payable target; // Added: target address for the transfer
+        uint256 amount;        // Now represents NZDD amount
+        address target;        // Removed payable since we're sending tokens
         mapping(address => bool) hasVoted;
     }
 
@@ -31,34 +34,41 @@ contract DAO {
     event ProposalExecuted(uint256 indexed proposalId);
     event Deposited(address indexed member, uint256 amount);
 
-    constructor(uint256 _minimumDeposit, uint256 _votingPeriodInDays) {
+    constructor(
+        address _nzddToken,
+        uint256 _minimumDeposit, 
+        uint256 _votingPeriodInDays
+    ) {
+        require(_nzddToken != address(0), "Invalid token address");
+        nzdd = IERC20(_nzddToken);
         minimumDeposit = _minimumDeposit;
         votingPeriod = _votingPeriodInDays * 1 days;
     }
 
-    // Deposit ETH to become a member
-    function deposit() external payable {
-        require(msg.value >= minimumDeposit, "Deposit amount too low");
+    // Deposit NZDD to become a member
+    function deposit(uint256 amount) external {
+        require(amount >= minimumDeposit, "Deposit amount too low");
         
-        members[msg.sender].depositAmount += msg.value;
+        require(nzdd.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        
+        members[msg.sender].depositAmount += amount;
         if (members[msg.sender].joinedAt == 0) {
             members[msg.sender].joinedAt = block.timestamp;
         }
-        totalDeposits += msg.value; // ?? we should confirm it gets updated after a proposal is executed
+        totalDeposits += amount;
         
-        emit Deposited(msg.sender, msg.value);
+        emit Deposited(msg.sender, amount);
     }
-// ??? Only DAO admin - no need for deposit amount check
+
     // Create a new proposal
     function createProposal(
         string memory description, 
         uint256 amount,
-        address payable target
+        address target
     ) external {
-        //require(members[msg.sender].depositAmount > 0, "Not a member");
         require(amount > 0, "Amount must be greater than 0");
-        //require(amount <= address(this).balance, "Amount exceeds DAO balance");
         require(target != address(0), "Invalid target address");
+        // require(amount <= nzdd.balanceOf(address(this)), "Amount exceeds DAO balance");
         
         uint256 proposalId = proposalCount++;
         Proposal storage proposal = proposals[proposalId];
@@ -102,26 +112,26 @@ contract DAO {
         uint256 votingPower = sqrt(members[msg.sender].depositAmount);
         proposal.yesVotes += votingPower;
 
+        uint256 totalVotingPower = sqrt(totalDeposits);
+        if (proposal.yesVotes * 100 > totalVotingPower * 51 && proposal.amount <= nzdd.balanceOf(address(this)))
+            {
+                executeProposal(proposalId);
+            }
+
         emit Voted(proposalId, msg.sender, true);
     }
 
     // Execute a proposal if it has passed
-    function executeProposal(uint256 proposalId) external {
+    function executeProposal(uint256 proposalId) internal {
         Proposal storage proposal = proposals[proposalId];
         
-        require(block.timestamp >= proposal.endTime, "Voting period not ended");
-        require(!proposal.executed, "Proposal already executed");
-        
-        // Calculate total possible voting power (sqrt of total deposits)
-        uint256 totalVotingPower = sqrt(totalDeposits);
-        // Require 51% of total possible voting power
-        require(proposal.yesVotes * 100 > totalVotingPower * 51, "Insufficient votes");
-        require(address(this).balance >= proposal.amount, "Insufficient DAO balance");
+        // require(block.timestamp >= proposal.endTime, "Voting period not ended");
+        // require(!proposal.executed, "Proposal already executed");      
+        //require(nzdd.balanceOf(address(this)) >= proposal.amount, "Insufficient DAO balance");
 
         proposal.executed = true;
         totalDeposits -= proposal.amount;
-        (bool success, ) = proposal.target.call{value: proposal.amount}("");
-        require(success, "Transfer failed");
+        require(nzdd.transfer(proposal.target, proposal.amount), "Transfer failed");
 
         emit ProposalExecuted(proposalId);
     }
