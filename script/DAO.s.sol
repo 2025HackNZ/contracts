@@ -11,8 +11,8 @@ contract DAOScript is Script {
 
     function run() public {
         vm.startBroadcast();
-
-        dao = new DAO(0, 7);
+        address nzddContract = 0xE91d143072fc5e92e6445f18aa35DBd43597340c;
+        dao = new DAO( nzddContract, 0, 7);
 
         console.log("Contract deployed at:", address(dao));
 
